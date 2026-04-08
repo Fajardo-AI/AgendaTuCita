@@ -1,0 +1,1045 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agenda de Reuniones</title>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        agenda: {
+                            yellow: '#F1A42A',
+                            blue: '#0A3572',
+                            red: '#B82318',
+                            light: '#FDF4E6',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- Supabase JS -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- FullCalendar JS -->
+    <script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js'></script>
+
+    <style>
+        body {
+            background-color: #FDF4E6;
+            color: #0A3572;
+            font-family: system-ui, -apple-system, sans-serif;
+        }
+
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+
+        .tab-active {
+            border-bottom: 2px solid #F1A42A;
+            color: #0A3572;
+            font-weight: 600;
+        }
+
+        .tab-inactive {
+            color: #6b7280;
+        }
+
+        /* FullCalendar Customizations */
+        .fc-day-free {
+            background-color: #bfdbfe !important;
+            cursor: pointer;
+            border: 1px solid #93c5fd !important;
+        }
+
+        .fc-day-empty {
+            background-color: #f9fafb !important;
+            cursor: pointer;
+        }
+
+        .fc-day-empty:hover {
+            background-color: #e2e8f0 !important;
+            transition: 0.2s;
+        }
+
+        .fc-day-free:hover {
+            background-color: #93c5fd !important;
+            transition: 0.2s;
+        }
+
+        /* ===== MOBILE RESPONSIVE FIXES ===== */
+        @media (max-width: 768px) {
+            /* Navbar compact */
+            nav .max-w-4xl {
+                padding-left: 0.5rem;
+                padding-right: 0.5rem;
+            }
+            nav h1 {
+                font-size: 0.95rem;
+            }
+            nav h1 img {
+                width: 24px;
+                height: 24px;
+            }
+
+            /* Main content less padding */
+            main.flex-grow {
+                padding: 12px 8px;
+            }
+
+            /* Calendar container adjustment */
+            #public-calendar {
+                height: auto !important;
+                min-height: 320px !important;
+            }
+            .bg-white.rounded-xl.shadow-sm.p-6 {
+                padding: 12px;
+            }
+
+            /* FullCalendar toolbar fix */
+            .fc .fc-toolbar {
+                flex-wrap: wrap;
+                gap: 4px;
+            }
+            .fc .fc-toolbar-title {
+                font-size: 0.95rem !important;
+            }
+            .fc .fc-toolbar.fc-header-toolbar {
+                margin-bottom: 0.5em;
+            }
+            .fc .fc-button {
+                padding: 4px 8px !important;
+                font-size: 0.7rem !important;
+            }
+
+            /* Slot cards single column */
+            #public-slots-container {
+                grid-template-columns: 1fr !important;
+            }
+
+            /* Filter area stack */
+            #public-slots-wrapper .flex.flex-col.md\:flex-row {
+                flex-direction: column;
+                gap: 12px;
+            }
+
+            /* Modals full-width */
+            #modal-agendar .max-w-md,
+            #modal-sugerir .max-w-md {
+                max-width: 100%;
+                margin: 0 4px;
+                border-radius: 16px;
+            }
+
+            /* Tabs touch-friendly */
+            .flex.gap-2.border-b {
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+            }
+            .flex.gap-2.border-b button {
+                min-height: 44px;
+            }
+
+            /* Auth card compact */
+            #view-auth-user .bg-white {
+                padding: 20px 16px;
+            }
+            #view-auth-user {
+                margin-top: 1.5rem;
+            }
+
+            /* Mis citas cards responsive */
+            #my-meetings-container .flex.flex-col.md\:flex-row {
+                flex-direction: column;
+            }
+
+            /* Inputs touch-friendly sizing */
+            input, select, textarea {
+                font-size: 16px !important; /* Prevents zoom on iOS */
+            }
+        }
+
+        @media (max-width: 380px) {
+            nav h1 {
+                font-size: 0.85rem;
+                gap: 4px;
+            }
+            #btn-logout {
+                font-size: 0.7rem;
+                padding: 4px 8px;
+            }
+        }
+    </style>
+</head>
+
+<body class="min-h-screen flex flex-col">
+
+    <!-- Navegación -->
+    <nav class="bg-agenda-blue text-white p-4 shadow-md sticky top-0 z-40">
+        <div class="max-w-4xl mx-auto flex justify-between items-center">
+            <h1 class="text-xl font-bold flex items-center gap-2">
+                <img src="logo.webp" alt="Logo" class="w-8 h-8 rounded-md object-cover">
+                Agenda Tu Cita!
+            </h1>
+            <div class="flex gap-2 items-center" id="nav-buttons">
+                <button id="btn-login-nav" onclick="openAuthModal()"
+                    class="px-3 py-1 bg-agenda-yellow text-agenda-blue rounded-md text-sm font-medium hover:bg-yellow-500 transition shadow-sm">Iniciar Sesión</button>
+                <button id="btn-logout" onclick="logoutUser()"
+                    class="hidden px-3 py-1 bg-agenda-red text-white rounded-md text-sm font-medium hover:bg-red-800 transition shadow-sm">Cerrar
+                    Sesión</button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Contenedor Principal -->
+    <main class="flex-grow p-4 max-w-4xl mx-auto w-full">
+
+        <!-- VISTA PRINCIPAL (LOGEADO / NO LOGEADO) -->
+        <section id="view-public" class="block animate-fade-in">
+            <div class="mb-6 mt-2 flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+                <div>
+                    <h2 class="text-2xl font-bold text-agenda-blue flex items-center gap-2">
+                        Hola, <span id="user-welcome-name" class="text-agenda-yellow">Invitado</span> 👋
+                    </h2>
+                    <p class="text-sm text-gray-600">Sistema de agendamiento y control</p>
+                </div>
+                <!-- Tabs -->
+                <div class="flex gap-2 border-b border-gray-300 w-full sm:w-auto overflow-x-auto no-scrollbar">
+                    <button onclick="switchPublicTab('agendar')" id="tab-agendar"
+                        class="px-4 py-2 tab-active whitespace-nowrap">Agendar Cita</button>
+                    <button onclick="switchPublicTab('mis-citas')" id="tab-mis-citas"
+                        class="px-4 py-2 tab-inactive whitespace-nowrap" style="display: none;">Mis Citas</button>
+                </div>
+            </div>
+
+            <!-- Tab: Agendar -->
+            <div id="user-agendar" class="block">
+                <div class="bg-white rounded-xl shadow-sm p-6 border border-gray-100 min-h-[500px]">
+
+                    <!-- Calendar Wrapper -->
+                    <div id="public-calendar-wrapper" class="block animate-fade-in">
+                        <div class="mb-4">
+                            <h3 class="font-bold text-lg text-agenda-blue">Selecciona tu Día</h3>
+                            <p class="text-sm text-gray-500">Los días sombreados en azul tienen disponibilidad. Toca
+                                cualquier fecha.</p>
+                        </div>
+                        <div id="public-calendar" class="min-h-[320px] sm:min-h-[400px] sm:h-[60vh]"></div>
+                    </div>
+
+                    <!-- Slots Wrapper -->
+                    <div id="public-slots-wrapper" class="hidden animate-fade-in">
+                        <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+                            <div>
+                                <button onclick="backToCalendar()"
+                                    class="bg-gray-100 px-3 py-1 rounded text-sm text-gray-600 hover:bg-gray-200 transition font-semibold mb-2 flex items-center gap-1">
+                                    ← Volver al Calendario
+                                </button>
+                                <h3 class="font-bold text-lg" id="slots-date-title">Horarios Disponibles</h3>
+                                <p class="text-sm text-gray-500">Haz clic en un horario para reservarlo.</p>
+                            </div>
+                            <div class="w-full md:w-auto">
+                                <label
+                                    class="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Filtrar
+                                    por Admin:</label>
+                                <select id="public-admin-filter" onchange="filterAndRenderSlots()"
+                                    class="w-full md:w-64 p-2 border border-gray-200 bg-gray-50 rounded-lg focus:ring-2 focus:ring-agenda-blue outline-none transition text-sm font-medium text-agenda-blue">
+                                    <option value="">Cualquier Administrador</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div id="public-slots-container" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                            <!-- Slots se cargaran aqui -->
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+            <!-- Tab: Mis Citas -->
+            <div id="user-mis-citas" class="hidden">
+                <div class="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
+                    <h3 class="font-bold text-lg mb-4">Historial de Mis Citas</h3>
+                    <div id="my-meetings-container" class="space-y-3">
+                        <div class="text-center text-gray-500 py-4">Buscando tus registros...</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Modal: Agendar Reunión Confirmación Rápida -->
+    <div id="modal-agendar"
+        class="fixed inset-0 bg-black/60 z-50 hidden flex items-center justify-center p-4 backdrop-blur-sm transition-opacity">
+        <div class="bg-white w-full max-w-md rounded-2xl shadow-xl overflow-hidden transform transition-all scale-95 opacity-0"
+            id="modal-agendar-content">
+            <div class="bg-agenda-blue text-white p-4 flex justify-between items-center">
+                <h3 class="font-bold text-lg">Confirmar Reserva</h3>
+                <button onclick="closeModal('modal-agendar')" class="text-white hover:text-gray-300">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12">
+                        </path>
+                    </svg>
+                </button>
+            </div>
+            <div class="p-6">
+                <!-- Resumen Cita -->
+                <div class="bg-agenda-light p-4 border border-agenda-yellow/50 rounded-xl mb-6">
+                    <div class="flex items-center gap-3 mb-2">
+                        <div class="bg-agenda-yellow p-2 rounded-lg text-white">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z">
+                                </path>
+                            </svg>
+                        </div>
+                        <div>
+                            <p class="text-sm text-gray-500 font-medium">Fecha Programada</p>
+                            <p class="font-bold text-agenda-blue" id="modal-fecha-txt"></p>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <div class="bg-blue-100 p-2 rounded-lg text-agenda-blue">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                        </div>
+                        <div>
+                            <p class="text-sm text-gray-500 font-medium">Horario y Admin</p>
+                            <p class="font-bold text-agenda-blue" id="modal-hora-txt"></p>
+                        </div>
+                    </div>
+                </div>
+
+                <form id="form-agendar" onsubmit="handleAgendar(event)">
+                    <input type="hidden" id="modal-slot-id">
+                    <input type="hidden" id="modal-slot-fecha">
+                    <input type="hidden" id="modal-slot-hora">
+                    <input type="hidden" id="modal-slot-admin">
+
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium mb-1 text-gray-700">Notas / Motivo de la Cita
+                            (Opcional)</label>
+                        <textarea id="agenda-notas" rows="2"
+                            placeholder="Ej. Quiero saber más sobre su producto especial..."
+                            class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-agenda-blue outline-none transition resize-none"></textarea>
+                    </div>
+
+                    <p class="text-xs text-center text-gray-400 mb-4 px-2">Tus datos personales (Nombre, Tel, Correo) se
+                        vincularán automáticamente gracias a tu sesión.</p>
+
+                    <button type="submit" id="btn-agendar-submit"
+                        class="w-full bg-agenda-blue text-white text-lg font-bold py-3 rounded-lg hover:bg-blue-900 transition shadow-md flex justify-center items-center gap-2">
+                        Confirmar y Agendar
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Sugerir Cita -->
+    <div id="modal-sugerir"
+        class="fixed inset-0 bg-black/60 z-50 hidden flex items-center justify-center p-4 backdrop-blur-sm transition-opacity">
+        <div class="bg-white w-full max-w-md rounded-2xl shadow-xl overflow-hidden transform transition-all scale-95 opacity-0"
+            id="modal-sugerir-content">
+            <div class="bg-gray-100 p-4 border-b border-gray-300 flex justify-between items-center">
+                <h3 class="font-bold text-lg text-gray-700">Sugerir un Horario</h3>
+                <button onclick="closeModal('modal-sugerir')" class="text-gray-500 hover:text-gray-800">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12">
+                        </path>
+                    </svg>
+                </button>
+            </div>
+            <div class="p-6">
+                <p class="text-sm text-gray-600 mb-4">El día <strong id="modal-sugerir-fecha-txt"
+                        class="text-agenda-blue"></strong> no cuenta con espacios programados.</p>
+                <p class="text-xs bg-yellow-50 text-yellow-800 p-2 rounded border border-yellow-200 mb-4">Al sugerir un
+                    horario, la cita quedará <strong>sujeta a confirmación</strong> de los administradores. No se
+                    garantiza disponibilidad.</p>
+
+                <form id="form-sugerir" onsubmit="handleSugerirCita(event)">
+                    <input type="hidden" id="modal-sugerir-fecha">
+
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium mb-1 text-gray-700">Hora Sugerida</label>
+                        <input type="time" id="sugerir-hora" required
+                            class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500 outline-none transition">
+                    </div>
+
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium mb-1 text-gray-700">Motivo Breve</label>
+                        <textarea id="sugerir-notas" rows="2" required placeholder="Ej. Necesito revisar un proyecto..."
+                            class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500 outline-none transition resize-none"></textarea>
+                    </div>
+
+                    <button type="submit" id="btn-sugerir-submit"
+                        class="w-full bg-agenda-blue text-white font-bold py-3 rounded-lg hover:bg-blue-900 transition shadow-md">
+                        Enviar Sugerencia
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Autenticación / Contacto -->
+    <div id="modal-auth"
+        class="fixed inset-0 bg-black/60 z-50 hidden flex items-center justify-center p-4 backdrop-blur-sm transition-opacity">
+        <div class="bg-white w-full max-w-md rounded-2xl shadow-xl overflow-hidden transform transition-all scale-95 opacity-0 text-center relative"
+            id="modal-auth-content">
+            <div class="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-agenda-yellow to-agenda-blue"></div>
+            
+            <div class="flex justify-end p-2 pb-0">
+                <button onclick="closeModal('modal-auth')" class="text-gray-400 hover:text-gray-600">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+
+            <div class="px-8 pb-8 pt-2">
+                <h2 class="text-2xl font-bold text-agenda-blue mb-2">Datos de Contacto</h2>
+                <p class="text-sm text-gray-500 mb-6" id="auth-subtitle">Para agendar una cita necesitamos tus datos. Si deseas iniciar sesión recuerda usar tu correo y tu contraseña.</p>
+
+                <!-- Tabs Login / Register -->
+                <div class="flex mb-6 border-b border-gray-200">
+                    <button onclick="toggleAuthMode('register')" id="auth-tab-register"
+                        class="flex-1 py-2 font-bold text-agenda-blue border-b-2 border-agenda-yellow">Soy Nuevo</button>
+                    <button onclick="toggleAuthMode('login')" id="auth-tab-login"
+                        class="flex-1 py-2 font-bold text-gray-400 border-b-2 border-transparent hover:text-gray-600 transition">Ya tengo cuenta</button>
+                </div>
+
+                <!-- Form Register -->
+                <form id="form-register" onsubmit="handleUserRegister(event)" class="space-y-4 text-left block">
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Nombre Completo</label>
+                        <input type="text" id="reg-nombre" required placeholder="Ej. Juan Pérez"
+                            class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-agenda-blue outline-none transition">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Teléfono</label>
+                        <input type="tel" id="reg-tel" required placeholder="1234567890"
+                            class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-agenda-blue outline-none transition">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Correo Electrónico</label>
+                        <input type="email" id="reg-email" required placeholder="tu@correo.com"
+                            class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-agenda-blue outline-none transition">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Crea una Contraseña</label>
+                        <input type="password" id="reg-pass" required placeholder="••••••••"
+                            class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-agenda-blue outline-none transition">
+                    </div>
+                    <button type="submit"
+                        class="w-full bg-agenda-yellow text-agenda-blue font-bold py-3 rounded-lg hover:bg-yellow-500 transition mt-2 shadow-sm">Continuar</button>
+                </form>
+
+                <!-- Form Login -->
+                <form id="form-login" onsubmit="handleUserLogin(event)" class="space-y-4 text-left hidden">
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Correo Electrónico</label>
+                        <input type="email" id="login-email" required placeholder="tu@correo.com"
+                            class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-agenda-blue outline-none transition">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Contraseña</label>
+                        <input type="password" id="login-pass" required placeholder="••••••••"
+                            class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-agenda-blue outline-none transition">
+                    </div>
+                    <button type="submit"
+                        class="w-full bg-agenda-blue text-white font-bold py-3 rounded-lg hover:bg-blue-900 transition mt-2 shadow-sm">Entrar
+                        a mi cuenta</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tostadas -->
+    <div id="toast-container" class="fixed bottom-4 left-4 right-4 sm:left-auto sm:right-4 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+    <script>
+        /* ==========================================
+           CONFIGURACIÓN SUPABASE
+           ========================================== */
+        const SUPABASE_URL = "https://fujcwsmggnstyremteco.supabase.co";
+        const SUPABASE_ANON_KEY = "sb_publishable_kZGPsLXJRA4EG-aBKyrs6g_coUa_07m";
+
+        let db = null;
+        let isSupabaseConfigured = false;
+
+        try {
+            if (SUPABASE_URL !== "AQUI_TU_URL" && SUPABASE_ANON_KEY !== "AQUI_TU_ANON_KEY") {
+                db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+                isSupabaseConfigured = true;
+                logConsole('Supabase inicializado correctamente.');
+
+                if (localStorage.getItem('agenda_admin_id')) {
+                    window.location.href = 'admin.html';
+                }
+
+                setupRealtime();
+                
+                // Cargar vista pública por defecto
+                loadAdminsFilter();
+                switchPublicTab('agendar');
+            } else {
+                showToast('Advertencia: Base de datos no conectada.', 'error', 5000);
+            }
+        } catch (e) { console.error('Error al inicializar Supabase: ', e); }
+
+        // Estado local de la aplicación
+        let availableSlots = [];
+        let currentPersonaId = null;
+        let currentPersonaName = null;
+        let publicCalendarInstance = null;
+        let selectedDateForSlots = null;
+        let pendingAction = null;
+        let pendingActionData = null;
+
+        /* ==========================================
+           UTILIDADES (Toasts, Modales)
+           ========================================== */
+
+        function showToast(message, type = 'success', duration = 3000) {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            const bgClass = type === 'success' ? 'bg-green-600' : 'bg-agenda-red';
+            const icon = type === 'success' ?
+                '<svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>' :
+                '<svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>';
+            toast.className = `${bgClass} text-white px-4 py-3 rounded-lg shadow-lg flex items-center gap-3 transform transition-all translate-y-full opacity-0 duration-300 pointer-events-auto max-w-sm`;
+            toast.innerHTML = `${icon} <span class="text-sm font-medium">${message}</span>`;
+            container.appendChild(toast);
+            setTimeout(() => toast.classList.remove('translate-y-full', 'opacity-0'), 10);
+            setTimeout(() => { toast.classList.add('translate-y-full', 'opacity-0'); setTimeout(() => toast.remove(), 300); }, duration);
+        }
+
+        function logConsole(msg, type = 'info') { console.log(`[AgendaBot] ${type.toUpperCase()}:`, msg); }
+
+        function openModal(id) {
+            const modal = document.getElementById(id);
+            const content = document.getElementById(`${id}-content`);
+            modal.classList.remove('hidden');
+            setTimeout(() => content.classList.remove('scale-95', 'opacity-0'), 10);
+        }
+
+        function closeModal(id) {
+            const content = document.getElementById(`${id}-content`);
+            content.classList.add('scale-95', 'opacity-0');
+            setTimeout(() => document.getElementById(id).classList.add('hidden'), 200);
+        }
+
+        /* ==========================================
+           LÓGICA DE AUTENTICACIÓN (CLIENTES/PERSONAS)
+           ========================================== */
+
+        function toggleAuthMode(mode) {
+            const isLogin = mode === 'login';
+            document.getElementById('form-login').style.display = isLogin ? 'block' : 'none';
+            document.getElementById('form-register').style.display = !isLogin ? 'block' : 'none';
+            document.getElementById('auth-tab-login').className = isLogin ? 'flex-1 py-2 font-bold text-agenda-blue border-b-2 border-agenda-yellow' : 'flex-1 py-2 font-bold text-gray-400 border-b-2 border-transparent hover:text-gray-600 transition';
+            document.getElementById('auth-tab-register').className = !isLogin ? 'flex-1 py-2 font-bold text-agenda-blue border-b-2 border-agenda-yellow' : 'flex-1 py-2 font-bold text-gray-400 border-b-2 border-transparent hover:text-gray-600 transition';
+        }
+
+        async function handleUserLogin(e) {
+            e.preventDefault();
+            if (!isSupabaseConfigured) return;
+            const correo = document.getElementById('login-email').value.trim();
+            const pass = document.getElementById('login-pass').value.trim();
+
+            try {
+                const btn = e.target.querySelector('button');
+                btn.innerHTML = 'Ingresando...';
+
+                // 1. Intentar logear como Admin
+                const { data: adminData } = await db.from('usuarios').select('*').eq('correo', correo).eq('password', pass).single();
+                if (adminData) {
+                    localStorage.setItem('agenda_admin_id', adminData.id);
+                    localStorage.setItem('agenda_admin_name', adminData.nombre);
+                    showToast(`Redirigiendo a tu Portal Admin...`, 'success');
+                    setTimeout(() => window.location.href = 'admin.html', 800);
+                    return;
+                }
+
+                // 2. Intentar logear como Cliente Público
+                const { data, error } = await db.from('personas').select('*').eq('correo', correo).eq('password', pass).single();
+
+                if (!data) throw new Error('Credenciales incorrectas');
+
+                currentPersonaId = data.id;
+                currentPersonaName = data.nombre;
+
+                showToast(`Hola de nuevo, ${currentPersonaName}`);
+                finishLogin();
+            } catch (error) {
+                showToast(error.message, 'error');
+                e.target.querySelector('button').innerHTML = 'Entrar a mi cuenta';
+            }
+        }
+
+        async function handleUserRegister(e) {
+            e.preventDefault();
+            if (!isSupabaseConfigured) return;
+            const nombre = document.getElementById('reg-nombre').value.trim();
+            const tel = document.getElementById('reg-tel').value.trim();
+            const correo = document.getElementById('reg-email').value.trim();
+            const pass = document.getElementById('reg-pass').value.trim();
+
+            try {
+                const btn = e.target.querySelector('button');
+                btn.innerHTML = 'Creando cuenta...';
+
+                // Cliente normal
+                const { data: existData } = await db.from('personas').select('id').eq('correo', correo).single();
+                if (existData) throw new Error('El correo ya está registrado. Inicia sesión.');
+
+                const { data: newP, error } = await db.from('personas').insert([{ nombre: nombre, telefono: tel, correo: correo, password: pass }]).select().single();
+
+                if (error) throw new Error(error.message);
+
+                currentPersonaId = newP.id;
+                currentPersonaName = newP.nombre;
+
+                showToast(`¡Cuenta creada con éxito!`);
+                finishLogin();
+            } catch (error) {
+                showToast(error.message, 'error');
+                e.target.querySelector('button').innerHTML = 'Registrarme';
+            }
+        }
+
+        function openAuthModal(action = null, data = null) {
+            pendingAction = action;
+            pendingActionData = data;
+            
+            // Forzamos que, al abrir por defecto como 'sugerir' o 'agendar', muestre la pestaña "Soy Nuevo" si no tiene cuenta
+            // o se mantenga donde está. Dejaremos su toggle mode actual.
+            openModal('modal-auth');
+        }
+
+        function finishLogin() {
+            closeModal('modal-auth');
+            document.getElementById('btn-login-nav').classList.add('hidden');
+            document.getElementById('btn-logout').classList.remove('hidden');
+            document.getElementById('user-welcome-name').innerText = currentPersonaName;
+            document.getElementById('tab-mis-citas').style.display = 'inline-block'; // Mostrar la pestaña
+            
+            // Reanudar accion pendiente
+            if (pendingAction === 'agendar') {
+                openAgendarModal(pendingActionData);
+            } else if (pendingAction === 'sugerir') {
+                openSugerirModal(pendingActionData);
+            }
+            
+            pendingAction = null;
+            pendingActionData = null;
+        }
+
+        function logoutUser() {
+            currentPersonaId = null;
+            currentPersonaName = null;
+            document.getElementById('btn-login-nav').classList.remove('hidden');
+            document.getElementById('btn-logout').classList.add('hidden');
+            document.getElementById('user-welcome-name').innerText = 'Invitado'; // Ocultar nombre
+            document.getElementById('tab-mis-citas').style.display = 'none'; // Ocultar
+            switchPublicTab('agendar');
+        }
+
+        /* ==========================================
+           LÓGICA PÚBLICA (TABS & VIEWS)
+           ========================================== */
+
+        async function loadAdminsFilter() {
+            if (!isSupabaseConfigured) return;
+            try {
+                const { data, error } = await db.from('usuarios')
+                    .select('nombre')
+                    .neq('nombre', 'Carlos'); // Discrimina al usuario Carlos
+
+                if (error) throw error;
+
+                const selectEl = document.getElementById('public-admin-filter');
+                selectEl.innerHTML = '<option value="">Cualquier Administrador</option>';
+                data.forEach(admin => {
+                    const opt = document.createElement('option');
+                    opt.value = admin.nombre;
+                    opt.textContent = admin.nombre;
+                    selectEl.appendChild(opt);
+                });
+            } catch (err) {
+                console.error("Error al cargar administradores", err);
+            }
+        }
+
+        function switchPublicTab(tab) {
+            ['agendar', 'mis-citas'].forEach(t => {
+                const isActive = t === tab;
+                document.getElementById(`user-${t}`).style.display = isActive ? 'block' : 'none';
+                document.getElementById(`tab-${t}`).className = isActive ? 'px-4 py-2 tab-active whitespace-nowrap' : 'px-4 py-2 tab-inactive whitespace-nowrap hover:text-agenda-blue transition';
+            });
+
+            if (tab === 'agendar') loadPublicSlots();
+            if (tab === 'mis-citas') loadMisCitas();
+        }
+
+        async function loadPublicSlots() {
+            if (!isSupabaseConfigured) return;
+
+            try {
+                let today = new Date().toISOString().split('T')[0];
+                const { data: dispData, error: dispError } = await db
+                    .from('disponibilidad')
+                    .select('*, usuarios(nombre)')
+                    .gte('fecha', today)
+                    .order('fecha', { ascending: true })
+                    .order('hora_inicio', { ascending: true });
+
+                if (dispError) throw dispError;
+
+                const { data: reuData, error: reuError } = await db.from('reuniones').select('disponibilidad_id, fecha, hora, estado');
+                if (reuError) throw reuError;
+
+                // Las reuniones que no están rechazadas ocupan el horario
+                const activeReu = reuData.filter(r => r.estado !== 'Rechazada');
+                const occupiedSet = new Set(activeReu.map(r => r.disponibilidad_id ? r.disponibilidad_id : `${r.fecha}_${r.hora}`));
+                
+                // Un bloque está disponible si su ID no fue tomado o (fallback) si su fecha_hora no fue tomada
+                availableSlots = dispData.filter(d => !occupiedSet.has(d.id) && !occupiedSet.has(`${d.fecha}_${d.hora_inicio}`));
+
+                // Filtrar horas que ya pasaron hoy
+                const nowStr = new Date().toTimeString().split(' ')[0];
+                availableSlots = availableSlots.filter(d => {
+                    if (d.fecha > today) return true;
+                    if (d.fecha === today && d.hora_fin > nowStr) return true;
+                    return false;
+                });
+
+                initPublicCalendar();
+
+            } catch (error) {
+                console.error("Error DB:", error.message);
+            }
+        }
+
+        function initPublicCalendar() {
+            const calendarEl = document.getElementById('public-calendar');
+            if (!calendarEl) return;
+
+            const diasOcupados = new Set(availableSlots.map(s => s.fecha));
+
+            if (!publicCalendarInstance) {
+                publicCalendarInstance = new FullCalendar.Calendar(calendarEl, {
+                    initialView: 'dayGridMonth',
+                    locale: 'es',
+                    buttonText: {
+                        today:    'Hoy',
+                        month:    'Mes',
+                        week:     'Semana',
+                        day:      'Día',
+                        list:     'Agenda'
+                    },
+                    hiddenDays: [0], // Ocultar domingo
+                    headerToolbar: { left: 'prev,next today', center: 'title', right: '' },
+                    dayCellClassNames: function (arg) {
+                        // Offset timezone to cleanly compare YYYY-MM-DD
+                        const offsetDate = new Date(arg.date.getTime() - (arg.date.getTimezoneOffset() * 60000));
+                        const dateStr = offsetDate.toISOString().split('T')[0];
+                        const todayStr = new Date(new Date().getTime() - (new Date().getTimezoneOffset() * 60000)).toISOString().split('T')[0];
+
+                        if (dateStr < todayStr) return ['bg-gray-100', 'opacity-50']; // Pasado
+                        if (diasOcupados.has(dateStr)) return ['fc-day-free'];
+                        return ['fc-day-empty'];
+                    },
+                    dateClick: function (info) {
+                        const todayStr = new Date(new Date().getTime() - (new Date().getTimezoneOffset() * 60000)).toISOString().split('T')[0];
+                        if (info.dateStr < todayStr) {
+                            showToast('No puedes interactuar con fechas que ya pasaron.', 'error');
+                            return;
+                        }
+
+                        const isFree = diasOcupados.has(info.dateStr);
+                        if (isFree) {
+                            showDailySlots(info.dateStr);
+                        } else {
+                            openSugerirModal(info.dateStr);
+                        }
+                    }
+                });
+                publicCalendarInstance.render();
+            } else {
+                publicCalendarInstance.render();
+            }
+        }
+
+        function openSugerirModal(dateStr) {
+            if (!currentPersonaId) {
+                openAuthModal('sugerir', dateStr);
+                return;
+            }
+            const d = new Date(dateStr + "T12:00:00");
+            document.getElementById('modal-sugerir-fecha-txt').textContent = d.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' });
+            document.getElementById('modal-sugerir-fecha').value = dateStr;
+            document.getElementById('sugerir-hora').value = '';
+            document.getElementById('sugerir-notas').value = '';
+            openModal('modal-sugerir');
+        }
+
+        async function handleSugerirCita(e) {
+            e.preventDefault();
+            if (!currentPersonaId) return;
+
+            const btn = document.getElementById('btn-sugerir-submit');
+            btn.disabled = true; btn.innerHTML = 'Enviando...';
+
+            const fecha = document.getElementById('modal-sugerir-fecha').value;
+            const hora = document.getElementById('sugerir-hora').value;
+            const notas = document.getElementById('sugerir-notas').value.trim();
+
+            try {
+                const { error } = await db.from('reuniones').insert([{
+                    persona_id: currentPersonaId,
+                    disponibilidad_id: null,
+                    fecha: fecha,
+                    hora: hora,
+                    estado: 'Sugerida',
+                    conclusiones: 'SUGERENCIA: ' + notas
+                }]);
+                if (error) throw error;
+
+                showToast('¡Sugerencia enviada! Queda sujeta a confirmación.', 'success', 4000);
+                closeModal('modal-sugerir');
+                switchPublicTab('mis-citas');
+            } catch (err) {
+                showToast(err.message, 'error');
+            } finally {
+                btn.disabled = false; btn.innerHTML = 'Enviar Sugerencia';
+            }
+        }
+
+        function showDailySlots(dateStr) {
+            selectedDateForSlots = dateStr;
+            document.getElementById('public-calendar-wrapper').classList.add('hidden');
+            document.getElementById('public-calendar-wrapper').classList.remove('block');
+            document.getElementById('public-slots-wrapper').classList.remove('hidden');
+            document.getElementById('public-slots-wrapper').classList.add('block');
+
+            const d = new Date(dateStr + "T12:00:00");
+            document.getElementById('slots-date-title').textContent = d.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' });
+
+            filterAndRenderSlots();
+        }
+
+        function backToCalendar() {
+            document.getElementById('public-slots-wrapper').classList.add('hidden');
+            document.getElementById('public-slots-wrapper').classList.remove('block');
+            document.getElementById('public-calendar-wrapper').classList.remove('hidden');
+            document.getElementById('public-calendar-wrapper').classList.add('block');
+            selectedDateForSlots = null;
+            if (publicCalendarInstance) { setTimeout(() => publicCalendarInstance.updateSize(), 50); }
+        }
+
+        function filterAndRenderSlots() {
+            const adminFilter = document.getElementById('public-admin-filter').value;
+            let finalSlots = availableSlots;
+            if (selectedDateForSlots) { finalSlots = finalSlots.filter(s => s.fecha === selectedDateForSlots); }
+            if (adminFilter) { finalSlots = finalSlots.filter(s => s.usuarios && s.usuarios.nombre === adminFilter); }
+            renderPublicSlots(finalSlots);
+        }
+
+        function renderPublicSlots(slots) {
+            const container = document.getElementById('public-slots-container');
+            if (slots.length === 0) {
+                container.innerHTML = '<div class="col-span-full text-center py-12 bg-gray-50 rounded-xl border border-dashed border-gray-300"><p class="text-gray-500 font-medium mb-1">No hay horarios disponibles.</p><p class="text-sm">Prueba ajustando el filtro de administrador.</p></div>';
+                return;
+            }
+
+            container.innerHTML = '';
+            slots.forEach(slot => {
+                const el = document.createElement('div');
+                el.className = 'bg-white p-5 rounded-xl shadow-sm border border-gray-200 flex flex-col justify-between transition hover:shadow-md hover:border-agenda-yellow/50';
+
+                const dateObj = new Date(slot.fecha + 'T12:00:00');
+                const dateStr = dateObj.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' });
+                const adminNom = slot.usuarios ? slot.usuarios.nombre : 'Desconocido';
+
+                el.innerHTML = `
+                    <div class="mb-5">
+                        <div class="flex items-center gap-2 mb-2 text-agenda-blue">
+                            <svg class="w-5 h-5 text-agenda-yellow" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                            <span class="font-bold capitalize">${dateStr}</span>
+                        </div>
+                        <div class="flex items-center gap-2 text-gray-600 mb-3">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                            <span class="font-mono text-sm">${slot.hora_inicio.substring(0, 5)} - ${slot.hora_fin.substring(0, 5)}</span>
+                        </div>
+                        <div class="text-xs font-semibold bg-gray-100 text-gray-700 inline-block px-3 py-1.5 rounded-full">
+                            Asesor: <span class="text-agenda-blue">${adminNom}</span>
+                        </div>
+                    </div>
+                    <button onclick='openAgendarModal(${JSON.stringify(slot)})' class="w-full bg-white text-agenda-blue border-2 border-agenda-blue font-bold py-2 rounded-lg hover:bg-agenda-blue hover:text-white transition focus:ring-4 focus:ring-blue-100">
+                        Seleccionar Horario
+                    </button>
+                `;
+                container.appendChild(el);
+            });
+        }
+
+        async function loadMisCitas() {
+            const container = document.getElementById('my-meetings-container');
+            if (!isSupabaseConfigured || !currentPersonaId) return;
+
+            try {
+                const { data, error } = await db.from('reuniones')
+                    .select('*, usuarios(nombre)')
+                    .eq('persona_id', currentPersonaId)
+                    .order('fecha', { ascending: false })
+                    .order('hora', { ascending: false });
+
+                if (error) throw error;
+
+                if (data.length === 0) {
+                    container.innerHTML = '<div class="text-center py-8 text-gray-400 border-2 border-dashed rounded-lg bg-gray-50">Aún no tienes reuniones agendadas.</div>';
+                    return;
+                }
+
+                container.innerHTML = '';
+                data.forEach(m => {
+                    let badgeClass = 'bg-gray-100 text-gray-800 border-gray-200';
+                    if (m.estado === 'Pendiente') badgeClass = 'bg-yellow-100 text-yellow-800 border-yellow-200';
+                    if (m.estado === 'Aceptada') badgeClass = 'bg-green-100 text-green-800 border-green-200';
+                    if (m.estado === 'Rechazada') badgeClass = 'bg-red-100 text-red-800 border-red-200';
+
+                    const adminStr = m.usuarios ? m.usuarios.nombre : 'Por Asignar';
+
+                    const el = document.createElement('div');
+                    el.className = 'p-4 border border-gray-100 rounded-lg bg-white flex flex-col md:flex-row md:items-center justify-between gap-4 transition shadow-sm';
+                    el.innerHTML = `
+                        <div class="flex-1">
+                            <div class="flex items-center gap-3 mb-2">
+                                <span class="text-xs px-2.5 py-1 rounded-full font-bold ${badgeClass} border">${m.estado || 'Pendiente'}</span>
+                                <span class="text-sm font-medium text-gray-500">Código Ref: ${m.id.substring(0, 8)}</span>
+                            </div>
+                            <h4 class="font-bold text-agenda-blue text-lg flex items-center gap-2">
+                                <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                                ${m.fecha} a las ${m.hora.substring(0, 5)}
+                            </h4>
+                            <div class="mt-2 text-sm flex flex-col gap-2">
+                                <div class="flex items-center gap-2">
+                                    <div class="w-6 h-6 rounded-full bg-agenda-yellow flex items-center justify-center text-white text-xs font-bold">
+                                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
+                                    </div>
+                                    <span class="font-medium text-gray-700">Asesor/a: <span class="text-agenda-blue font-bold">${adminStr}</span></span>
+                                </div>
+                                ${m.conclusiones ? `
+                                <div class="mt-1 bg-gray-50 border border-gray-200 rounded-lg p-3 text-gray-700">
+                                    <strong class="text-agenda-blue block mb-1 text-xs uppercase tracking-wider">${m.estado === 'Pendiente' ? 'Tus notas adjuntas:' : 'Información y/o Enlace de acceso:'}</strong>
+                                    <span class="whitespace-pre-wrap">${m.conclusiones}</span>
+                                </div>
+                                ` : ''}
+                            </div>
+                        </div>
+                    `;
+                    container.appendChild(el);
+                });
+            } catch (err) {
+                container.innerHTML = `<div class="text-red-500">Error cargando tus citas.</div>`;
+            }
+        }
+
+        function openAgendarModal(slotObj) {
+            if (!currentPersonaId) {
+                openAuthModal('agendar', slotObj);
+                return;
+            }
+            document.getElementById('modal-fecha-txt').textContent = slotObj.fecha;
+            document.getElementById('modal-hora-txt').textContent = `${slotObj.hora_inicio.substring(0, 5)} - Asesor: ${slotObj.usuarios ? slotObj.usuarios.nombre : 'Desconocido'}`;
+
+            document.getElementById('modal-slot-id').value = slotObj.id;
+            document.getElementById('modal-slot-fecha').value = slotObj.fecha;
+            document.getElementById('modal-slot-hora').value = slotObj.hora_inicio;
+            document.getElementById('modal-slot-admin').value = slotObj.admin_id;
+            document.getElementById('agenda-notas').value = '';
+
+            openModal('modal-agendar');
+        }
+
+        async function handleAgendar(e) {
+            e.preventDefault();
+            if (!isSupabaseConfigured || !currentPersonaId) return;
+
+            const btn = document.getElementById('btn-agendar-submit');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="animate-pulse">Reservando tu espacio...</span>';
+
+            const fecha = document.getElementById('modal-slot-fecha').value;
+            const hora = document.getElementById('modal-slot-hora').value;
+            const slotId = document.getElementById('modal-slot-id').value;
+            const adminId = document.getElementById('modal-slot-admin').value;
+            const notas = document.getElementById('agenda-notas').value.trim();
+
+            try {
+                // Validación para doble reserva en el backend
+                const { data: checkData } = await db.from('reuniones').select('id').eq('fecha', fecha).eq('hora', hora);
+                if (checkData && checkData.length > 0) throw new Error("¡Vaya! Este horario acaba de ser ocupado por alguien más.");
+
+                // Inserción en Reuniones usando el personaId logeado
+                const { error } = await db.from('reuniones').insert([{
+                    persona_id: currentPersonaId,
+                    disponibilidad_id: slotId,
+                    fecha: fecha,
+                    hora: hora,
+                    estado: 'Pendiente',
+                    admin_id: adminId || null,
+                    conclusiones: notas
+                }]);
+
+                if (error) throw error;
+
+                showToast('¡Reunión agendada con éxito!');
+                closeModal('modal-agendar');
+                switchPublicTab('mis-citas'); // Llevarlo a ver su nueva cita
+
+            } catch (error) {
+                showToast(error.message, 'error', 5000);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = 'Confirmar y Agendar';
+            }
+        }
+
+        /* ==========================================
+           REALTIME SUPABASE (Suscripciones)
+           ========================================== */
+        function setupRealtime() {
+            try {
+                db.channel('public-updates')
+                    .on('postgres_changes', { event: '*', schema: 'public', table: 'reuniones' }, p => {
+                        if (document.getElementById('user-agendar').style.display === 'block') loadPublicSlots();
+                        if (document.getElementById('user-mis-citas').style.display === 'block') loadMisCitas();
+                    })
+                    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'disponibilidad' }, p => {
+                        if (document.getElementById('user-agendar').style.display === 'block') {
+                            loadPublicSlots();
+                            showToast('Nuevos horarios detectados', 'success', 2000);
+                        }
+                    }).subscribe();
+            } catch (err) { }
+        }
+    </script>
+</body>
+
+</html>
