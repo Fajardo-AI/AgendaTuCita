@@ -412,10 +412,10 @@
 
             <div class="px-8 pb-8 pt-2">
                 <h2 class="text-2xl font-bold text-agenda-blue mb-2">Datos de Contacto</h2>
-                <p class="text-sm text-gray-500 mb-6" id="auth-subtitle">Para agendar una cita necesitamos tus datos. Si deseas iniciar sesión recuerda usar tu correo y tu contraseña.</p>
+                <p class="text-sm text-gray-500 mb-6" id="auth-subtitle">Para agendar una cita necesitamos tu teléfono. No necesitas contraseña.</p>
 
                 <!-- Tabs Login / Register -->
-                <div class="flex mb-6 border-b border-gray-200">
+                <div class="flex mb-6 border-b border-gray-200" id="auth-tabs">
                     <button onclick="toggleAuthMode('register')" id="auth-tab-register"
                         class="flex-1 py-2 font-bold text-agenda-blue border-b-2 border-agenda-yellow">Soy Nuevo</button>
                     <button onclick="toggleAuthMode('login')" id="auth-tab-login"
@@ -431,38 +431,53 @@
                     </div>
                     <div>
                         <label class="block text-sm font-medium mb-1">Teléfono</label>
-                        <input type="tel" id="reg-tel" required placeholder="1234567890"
+                        <input type="tel" id="reg-tel" required placeholder="1234567890" minlength="7"
                             class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-agenda-blue outline-none transition">
                     </div>
                     <div>
-                        <label class="block text-sm font-medium mb-1">Correo Electrónico</label>
-                        <input type="email" id="reg-email" required placeholder="tu@correo.com"
-                            class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-agenda-blue outline-none transition">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium mb-1">Crea una Contraseña</label>
-                        <input type="password" id="reg-pass" required placeholder="••••••••"
+                        <label class="block text-sm font-medium mb-1">Correo Electrónico <span class="text-xs text-gray-400 font-normal">(Opcional)</span></label>
+                        <input type="email" id="reg-email" placeholder="tu@correo.com"
                             class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-agenda-blue outline-none transition">
                     </div>
                     <button type="submit"
                         class="w-full bg-agenda-yellow text-agenda-blue font-bold py-3 rounded-lg hover:bg-yellow-500 transition mt-2 shadow-sm">Continuar</button>
+                    <div class="text-center mt-2">
+                        <button type="button" onclick="toggleAuthMode('admin')" class="text-xs text-gray-500 hover:text-agenda-blue underline">Ingreso para Administradores</button>
+                    </div>
                 </form>
 
                 <!-- Form Login -->
                 <form id="form-login" onsubmit="handleUserLogin(event)" class="space-y-4 text-left hidden">
                     <div>
-                        <label class="block text-sm font-medium mb-1">Correo Electrónico</label>
-                        <input type="email" id="login-email" required placeholder="tu@correo.com"
-                            class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-agenda-blue outline-none transition">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium mb-1">Contraseña</label>
-                        <input type="password" id="login-pass" required placeholder="••••••••"
+                        <label class="block text-sm font-medium mb-1">Tu Teléfono</label>
+                        <input type="tel" id="login-tel" required placeholder="1234567890" minlength="7"
                             class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-agenda-blue outline-none transition">
                     </div>
                     <button type="submit"
                         class="w-full bg-agenda-blue text-white font-bold py-3 rounded-lg hover:bg-blue-900 transition mt-2 shadow-sm">Entrar
                         a mi cuenta</button>
+                    <div class="text-center mt-2">
+                        <button type="button" onclick="toggleAuthMode('admin')" class="text-xs text-gray-500 hover:text-agenda-blue underline">Ingreso para Administradores</button>
+                    </div>
+                </form>
+
+                <!-- Form Admin -->
+                <form id="form-admin" onsubmit="handleAdminLogin(event)" class="space-y-4 text-left hidden">
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Correo Electrónico (Admin)</label>
+                        <input type="email" id="admin-email" required placeholder="admin@correo.com"
+                            class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-agenda-blue outline-none transition">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Contraseña</label>
+                        <input type="password" id="admin-pass" required placeholder="••••••••"
+                            class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-agenda-blue outline-none transition">
+                    </div>
+                    <button type="submit"
+                        class="w-full bg-gray-800 text-white font-bold py-3 rounded-lg hover:bg-gray-900 transition mt-2 shadow-sm">Entrar al Panel Admin</button>
+                    <div class="text-center mt-2">
+                        <button type="button" onclick="toggleAuthMode('login')" class="text-xs text-gray-500 hover:text-agenda-blue underline">← Volver al acceso de clientes</button>
+                    </div>
                 </form>
             </div>
         </div>
@@ -549,23 +564,32 @@
 
         function toggleAuthMode(mode) {
             const isLogin = mode === 'login';
+            const isReg = mode === 'register';
+            const isAdmin = mode === 'admin';
+            
             document.getElementById('form-login').style.display = isLogin ? 'block' : 'none';
-            document.getElementById('form-register').style.display = !isLogin ? 'block' : 'none';
-            document.getElementById('auth-tab-login').className = isLogin ? 'flex-1 py-2 font-bold text-agenda-blue border-b-2 border-agenda-yellow' : 'flex-1 py-2 font-bold text-gray-400 border-b-2 border-transparent hover:text-gray-600 transition';
-            document.getElementById('auth-tab-register').className = !isLogin ? 'flex-1 py-2 font-bold text-agenda-blue border-b-2 border-agenda-yellow' : 'flex-1 py-2 font-bold text-gray-400 border-b-2 border-transparent hover:text-gray-600 transition';
+            document.getElementById('form-register').style.display = isReg ? 'block' : 'none';
+            document.getElementById('form-admin').style.display = isAdmin ? 'block' : 'none';
+            
+            document.getElementById('auth-tabs').style.display = isAdmin ? 'none' : 'flex';
+            document.getElementById('auth-subtitle').innerText = isAdmin ? 'Ingresa tus credenciales de administrador.' : 'Para agendar una cita necesitamos tu teléfono. No necesitas contraseña.';
+
+            if (!isAdmin) {
+                document.getElementById('auth-tab-login').className = isLogin ? 'flex-1 py-2 font-bold text-agenda-blue border-b-2 border-agenda-yellow' : 'flex-1 py-2 font-bold text-gray-400 border-b-2 border-transparent hover:text-gray-600 transition';
+                document.getElementById('auth-tab-register').className = isReg ? 'flex-1 py-2 font-bold text-agenda-blue border-b-2 border-agenda-yellow' : 'flex-1 py-2 font-bold text-gray-400 border-b-2 border-transparent hover:text-gray-600 transition';
+            }
         }
 
-        async function handleUserLogin(e) {
+        async function handleAdminLogin(e) {
             e.preventDefault();
             if (!isSupabaseConfigured) return;
-            const correo = document.getElementById('login-email').value.trim();
-            const pass = document.getElementById('login-pass').value.trim();
+            const correo = document.getElementById('admin-email').value.trim();
+            const pass = document.getElementById('admin-pass').value.trim();
 
             try {
                 const btn = e.target.querySelector('button');
-                btn.innerHTML = 'Ingresando...';
+                btn.innerHTML = 'Verificando...';
 
-                // 1. Intentar logear como Admin
                 const { data: adminData } = await db.from('usuarios').select('*').eq('correo', correo).eq('password', pass).single();
                 if (adminData) {
                     localStorage.setItem('agenda_admin_id', adminData.id);
@@ -573,12 +597,27 @@
                     showToast(`Redirigiendo a tu Portal Admin...`, 'success');
                     setTimeout(() => window.location.href = 'admin.html', 800);
                     return;
+                } else {
+                     throw new Error('Credenciales incorrectas');
                 }
+            } catch(error) {
+                showToast(error.message, 'error');
+                e.target.querySelector('button').innerHTML = 'Entrar al Panel Admin';
+            }
+        }
 
-                // 2. Intentar logear como Cliente Público
-                const { data, error } = await db.from('personas').select('*').eq('correo', correo).eq('password', pass).single();
+        async function handleUserLogin(e) {
+            e.preventDefault();
+            if (!isSupabaseConfigured) return;
+            const tel = document.getElementById('login-tel').value.trim();
 
-                if (!data) throw new Error('Credenciales incorrectas');
+            try {
+                const btn = e.target.querySelector('button');
+                btn.innerHTML = 'Buscando...';
+
+                const { data, error } = await db.from('personas').select('*').eq('telefono', tel).single();
+
+                if (!data) throw new Error('No encontramos una cuenta con ese teléfono. Por favor, regístrate.');
 
                 currentPersonaId = data.id;
                 currentPersonaName = data.nombre;
@@ -596,20 +635,23 @@
             if (!isSupabaseConfigured) return;
             const nombre = document.getElementById('reg-nombre').value.trim();
             const tel = document.getElementById('reg-tel').value.trim();
-            const correo = document.getElementById('reg-email').value.trim();
-            const pass = document.getElementById('reg-pass').value.trim();
+            const regEmailEl = document.getElementById('reg-email');
+            const correo = regEmailEl ? regEmailEl.value.trim() : '';
 
             try {
                 const btn = e.target.querySelector('button');
                 btn.innerHTML = 'Creando cuenta...';
 
-                // Cliente normal
-                const { data: existData } = await db.from('personas').select('id').eq('correo', correo).single();
-                if (existData) throw new Error('El correo ya está registrado. Inicia sesión.');
+                // Verificar si ya existe el telefono
+                const { data: existData } = await db.from('personas').select('id').eq('telefono', tel).single();
+                if (existData) throw new Error('Este teléfono ya está registrado. Por favor, inicia sesión.');
 
-                const { data: newP, error } = await db.from('personas').insert([{ nombre: nombre, telefono: tel, correo: correo, password: pass }]).select().single();
+                const payload = { nombre: nombre, telefono: tel };
+                if (correo) payload.correo = correo;
 
-                if (error) throw new Error(error.message);
+                const { data: newP, error } = await db.from('personas').insert([payload]).select().single();
+
+                if (error) throw new Error("Error creando cuenta. Intenta de nuevo.");
 
                 currentPersonaId = newP.id;
                 currentPersonaName = newP.nombre;
@@ -618,7 +660,7 @@
                 finishLogin();
             } catch (error) {
                 showToast(error.message, 'error');
-                e.target.querySelector('button').innerHTML = 'Registrarme';
+                e.target.querySelector('button').innerHTML = 'Continuar';
             }
         }
 
